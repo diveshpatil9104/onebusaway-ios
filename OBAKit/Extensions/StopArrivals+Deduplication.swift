@@ -27,23 +27,19 @@ extension StopArrivals {
     var deduplicatedArrivalsAndDepartures: [ArrivalDeparture] {
         var seenTripIDs = Set<String>()
         var deduplicated: [ArrivalDeparture] = []
-        
         for arrivalDeparture in arrivalsAndDepartures {
             // Use tripID as the unique identifier
             // This ensures each unique trip appears only once, regardless of
             // minor differences in status or predicted times
             let tripKey = arrivalDeparture.tripID
-            
             if !seenTripIDs.contains(tripKey) {
                 seenTripIDs.insert(tripKey)
                 deduplicated.append(arrivalDeparture)
             }
         }
-        
         return deduplicated
     }
 }
-
 extension Array where Element == ArrivalDeparture {
     /// Removes duplicate arrivals based on trip ID.
     ///
@@ -53,14 +49,11 @@ extension Array where Element == ArrivalDeparture {
     /// - Returns: An array with duplicate trips removed, preserving the first occurrence
     func deduplicatedByTrip() -> [ArrivalDeparture] {
         var seenTripIDs = Set<String>()
-        
         return self.filter { arrivalDeparture in
             let tripKey = arrivalDeparture.tripID
-            
             guard !seenTripIDs.contains(tripKey) else {
                 return false
             }
-            
             seenTripIDs.insert(tripKey)
             return true
         }
