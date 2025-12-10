@@ -716,23 +716,28 @@ public class StopViewController: UIViewController,
         guard let stopArrivals = self.stopArrivals else { return [] }
         var sections: [OBAListViewSection] = []
 
+        // Use deduplicated arrivals to prevent duplicate entries
+        let arrivalsAndDepartures = stopArrivals.deduplicatedArrivalsAndDepartures
+
         if stopPreferences.sortType == .time {
             let arrDeps: [ArrivalDeparture]
             if isListFiltered {
-                arrDeps = stopArrivals.arrivalsAndDepartures.filter(preferences: stopPreferences)
+                arrDeps = arrivalsAndDepartures.filter(preferences: stopPreferences)
             } else {
-                arrDeps = stopArrivals.arrivalsAndDepartures
+                arrDeps = arrivalsAndDepartures
             }
             sections = [sectionForGroup(groupRoute: nil, arrDeps: arrDeps)]
         } else {
-            let groups = stopArrivals.arrivalsAndDepartures.group(preferences: stopPreferences, filter: isListFiltered).localizedStandardCompare()
-            // Regardless of the provided `showSectionHeader`, if stops are grouped by route, we will always show the section header.
+            // For route-based grouping, pass deduplicated arrivals directly
+            let groups = arrivalsAndDepartures
+                .group(preferences: stopPreferences, filter: isListFiltered)
+                .localizedStandardCompare()
+            
             sections = groups.map { sectionForGroup(groupRoute: $0.route, arrDeps: $0.arrivalDepartures) }
         }
 
         return sections
     }
-
     private func arrivalDepartureItem(for arrivalDeparture: ArrivalDeparture) -> ArrivalDepartureItem {
         let alarmAvailable = canCreateAlarm(for: arrivalDeparture)
         let highlightTimeOnDisplay = shouldHighlight(arrivalDeparture: arrivalDeparture)
