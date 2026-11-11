@@ -18,18 +18,22 @@ import UIKit
 /// by path and would otherwise hand back an earlier test's bundle.
 // `nonisolated` and `@unchecked Sendable` for the same reasons as
 // `DonationsConfigBundle` in DonationsManagerTests.
+/// A nil `moreTab` leaves the `MoreTab` key out, as an app with no More tab
+/// settings does.
 private nonisolated class MoreConfigBundle: Bundle, @unchecked Sendable {
-    var moreTab: [String: Any] = [:]
+    var moreTab: [String: Any]?
     var donationsEnabledValue = false
 
     override func object(forInfoDictionaryKey key: String) -> Any? {
         if key == "OBAKitConfig" {
-            return ["MoreTab": moreTab, "Donations": ["Enabled": donationsEnabledValue]]
+            var config: [String: Any] = ["Donations": ["Enabled": donationsEnabledValue]]
+            config["MoreTab"] = moreTab
+            return config
         }
         return super.object(forInfoDictionaryKey: key)
     }
 
-    static func create(moreTab: [String: Any], donationsEnabled: Bool) throws -> MoreConfigBundle {
+    static func create(moreTab: [String: Any]?, donationsEnabled: Bool) throws -> MoreConfigBundle {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let bundle = try #require(MoreConfigBundle(path: dir.path))
@@ -86,9 +90,10 @@ final class MoreViewControllerTests: OBATestCase {
 
     // MARK: - Helpers
 
-    /// `ShowHelpOutSection` is off unless a test turns it on, and `DevelopURL`
-    /// is empty, so neither falls back to the shipped defaults.
-    private func buildController(moreTab: [String: Any] = [:], donationsEnabled: Bool = false) throws -> MoreViewController {
+    /// Unless `turnHelpOutOff` is false, `ShowHelpOutSection` is off and
+    /// `DevelopURL` is empty, so neither falls back to the shipped defaults.
+    /// With it false and no `moreTab`, the app has no More tab settings at all.
+    private func buildController(moreTab: [String: Any] = [:], donationsEnabled: Bool = false, turnHelpOutOff: Bool = true) throws -> MoreViewController {
         let dataLoader = MockDataLoader(testName: name)
         stubRegions(dataLoader: dataLoader)
         stubAgenciesWithCoverage(dataLoader: dataLoader, baseURL: Fixtures.pugetSoundRegion.OBABaseURL)
@@ -108,8 +113,9 @@ final class MoreViewControllerTests: OBATestCase {
             fixedRegionName: Fixtures.pugetSoundRegion.name,
             onDemandSupport: OnDemandSupport()
         )
-        let settings: [String: Any] = ["ShowHelpOutSection": false, "DevelopURL": ""]
-        let bundle = try MoreConfigBundle.create(moreTab: settings.merging(moreTab) { $1 }, donationsEnabled: donationsEnabled)
+        let helpOutOff: [String: Any] = turnHelpOutOff ? ["ShowHelpOutSection": false, "DevelopURL": ""] : [:]
+        let settings = helpOutOff.merging(moreTab) { $1 }
+        let bundle = try MoreConfigBundle.create(moreTab: settings.isEmpty ? nil : settings, donationsEnabled: donationsEnabled)
         let application = MoreConfigApplication(config: config, configBundle: bundle)
         application.delegate = openedURLs
         return MoreViewController(application: application)
@@ -145,10 +151,17 @@ final class MoreViewControllerTests: OBATestCase {
 
     // MARK: - Sections
 
-    @Test func `Without agency settings only the standard sections show`() throws {
+    @Test func `With Help Out turned off and no agency links only the standard sections show`() throws {
         let controller = try buildController()
 
         #expect(sections(controller).map(\.id) == ["header", "updates_and_alerts", "my_location", "about"])
+    }
+
+    @Test func `With no More tab settings the shipped defaults show Help Out with the development link`() throws {
+        let controller = try buildController(turnHelpOutOff: false)
+
+        #expect(sections(controller).map(\.id) == ["header", "updates_and_alerts", "my_location", "help_out", "about"])
+        #expect(try urlsOpened(byTapping: "help_out", of: controller) == [try url("https://github.com/oneBusAway/onebusaway-ios")])
     }
 
     @Test func `Sections keep their order when every one is configured`() throws {
